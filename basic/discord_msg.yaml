@@ -1,7 +1,6 @@
 ---
-- hosts: {{ hosts }}
-
-  become: true
+- name: notify discord
+  hosts: "{{ hosts }}"
   tasks:
     - name: send discord message
       uri:
