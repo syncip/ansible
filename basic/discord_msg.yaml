@@ -1,0 +1,14 @@
+---
+- name: notify discord
+  hosts: all
+  tasks:
+    - name: send discord message
+      uri:
+        url: "https://discord.com/api/webhooks/1119291423817224333/KAnrBWNYkT7ipccMZkILqK6dSTopxg6tiG4Hd6upkkeIixSiQaRCva9WBTtuSlb19NYq"
+        method: POST
+        body_format: json
+        body: '{"content": "your-message"}'
+        headers:
+          Content-Type: application/json
+        status_code: 204
+      # when: your-condition
