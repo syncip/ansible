@@ -1,10 +1,10 @@
 ---
-- name: Update apt-get repo and cache
-  hosts: all
+- hosts: all
+
   become: true
   tasks:
-    - name: Update all packages
-      apt: 
+    - name: update apt packages
+      apt:
         upgrade: yes
         update_cache: yes
     - name: Check if a reboot is needed for Debian and Ubuntu boxes
