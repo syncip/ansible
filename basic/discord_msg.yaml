@@ -1,6 +1,6 @@
 ---
 - name: notify discord
-  hosts: ihostart
+  hosts: all
   tasks:
     - name: send discord message
       uri:
