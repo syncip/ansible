@@ -1,0 +1,5 @@
+- name: Send ntfy.sh update
+  uri:
+    url: "https://ntfy.qp8.de/{{ ntfy_channel }}"
+    method: POST
+    body: "Test reseeding complete"
