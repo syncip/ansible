@@ -1,5 +1,5 @@
 - name: Send ntfy.sh message
-  hosts: "103.212.81.169:12021"
+  hosts: all
   tasks:
     - name: send POST message
       uri:
