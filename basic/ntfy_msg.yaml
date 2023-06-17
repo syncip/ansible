@@ -1,4 +1,5 @@
 - name: Send ntfy.sh message
+  hosts: all
   tasks:
     - name: send POST message
       uri:
