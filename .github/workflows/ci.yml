@@ -27,15 +27,10 @@ jobs:
   test:
     name: test (${{ matrix.image }})
     runs-on: ubuntu-24.04
-    continue-on-error: ${{ matrix.experimental }}
     strategy:
       fail-fast: false
       matrix:
-        image: ["debian:12", "debian:13", "ubuntu:22.04", "ubuntu:24.04"]
-        experimental: [false]
-        include:
-          - image: "ubuntu:26.04"
-            experimental: true
+        image: ["debian:12", "debian:13", "ubuntu:22.04", "ubuntu:24.04", "ubuntu:26.04"]
     steps:
       - uses: actions/checkout@v4
 
@@ -60,13 +55,14 @@ jobs:
       - name: Ergebnis prüfen
         run: |
           set -x
-          docker exec target bash -euo pipefail -c '
+          docker exec target bash -euxo pipefail -c '
             sshd="$(sshd -T)"
             fw="$(ufw status)"
             grep -qx "port 22022" <<<"$sshd"
             ! grep -qx "port 22" <<<"$sshd"
             grep -qx "passwordauthentication no" <<<"$sshd"
-            grep -qx "permitrootlogin without-password" <<<"$sshd"
+            # OpenSSH < 10 schreibt "without-password", ab 10 "prohibit-password"
+            grep -Eqx "permitrootlogin (without|prohibit)-password" <<<"$sshd"
             grep -qx "authenticationmethods publickey" <<<"$sshd"
             [[ -n "$(ss -Htln "sport = :22022")" ]]
             [[ -z "$(ss -Htln "sport = :22")" ]]
