@@ -48,6 +48,9 @@ info() { printf '%s==>%s %s\n' "$C_GREEN" "$C_RESET" "$*" >&2; }
 warn() { printf '%sWARNUNG:%s %s\n' "$C_YELLOW" "$C_RESET" "$*" >&2; }
 die()  { printf '%sFEHLER:%s %s\n' "$C_RED" "$C_RESET" "$*" >&2; exit 1; }
 
+# Nie kommentarlos abbrechen: unerwartete Fehler mit Zeile und Befehl melden.
+trap 'die "Unerwarteter Fehler in Zeile $LINENO: $BASH_COMMAND (Protokoll: $LOG_FILE)"' ERR
+
 usage() {
   cat <<'EOF'
 Aufruf: setup.sh [Optionen]
@@ -75,8 +78,13 @@ lines_to_array() {
   local line
   _arr=()
   while IFS= read -r line; do
-    [[ -n "$line" ]] && _arr+=("$line")
+    if [[ -n "$line" ]]; then
+      _arr+=("$line")
+    fi
   done <<<"$2"
+  # Eine leere Auswahl ist gültig (z. B. keine zusätzlichen Ports) und darf
+  # wegen "set -e" nicht als Fehler zurückkommen.
+  return 0
 }
 
 wt_yesno() {

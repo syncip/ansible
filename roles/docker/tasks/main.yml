@@ -42,6 +42,12 @@
     # Paketliste neu laden, wenn die Quelle neu ist oder Docker noch fehlt
     # (z. B. nach einem abgebrochenen Lauf)
     update_cache: "{{ docker_repo.changed or 'docker-ce' not in ansible_facts.packages }}"
+  register: docker_install
+  # Überschneidet sich das Einlesen mit der automatischen Paketaktualisierung
+  # des Systems, fehlt die neue Quelle evtl. noch – dann erneut versuchen.
+  retries: 3
+  delay: 10
+  until: docker_install is succeeded
 
 - name: Verzeichnis /etc/docker
   ansible.builtin.file:
