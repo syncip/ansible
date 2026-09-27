@@ -1,0 +1,29 @@
+# Verwaltet durch server-setup (github.com/syncip/ansible) – manuelle Änderungen werden überschrieben.
+# Manuelle Änderungen werden beim nächsten Lauf von setup.sh überschrieben.
+# Diese Datei wird als erste eingelesen – bei sshd gilt der erste Wert.
+
+{% for port in ssh_listen_ports %}
+Port {{ port }}
+{% endfor %}
+
+{% if ssh_harden | bool %}
+# Nur Login per SSH-Key, auch für root
+PermitRootLogin prohibit-password
+PubkeyAuthentication yes
+AuthenticationMethods publickey
+PasswordAuthentication no
+KbdInteractiveAuthentication no
+PermitEmptyPasswords no
+
+MaxAuthTries {{ ssh_max_auth_tries }}
+LoginGraceTime {{ ssh_login_grace_time }}
+X11Forwarding no
+{% elif ssh_current_root_login == 'no' %}
+# Übergangsphase: Key-Login für root erlauben, damit er getestet werden kann.
+PermitRootLogin prohibit-password
+{% else %}
+# Übergangsphase: Login-Regeln bleiben unverändert, bis der Key-Login bestätigt ist.
+{% endif %}
+
+# Kryptografie bewusst NICHT festgelegt: die Vorgaben von OpenSSH werden mit
+# Updates besser (z. B. post-quanten-sicherer Schlüsseltausch in OpenSSH 10).

@@ -1,0 +1,24 @@
+---
+- name: Fail2ban installieren
+  ansible.builtin.apt:
+    name:
+      - fail2ban
+      - python3-systemd   # liest direkt aus dem Journal (kein /var/log/auth.log nötig)
+    state: present
+
+- name: Fail2ban konfigurieren
+  ansible.builtin.template:
+    src: jail.local.j2
+    dest: /etc/fail2ban/jail.d/server-setup.local
+    mode: "0644"
+  notify: Fail2ban neu starten
+
+- name: Konfiguration testen
+  ansible.builtin.command: fail2ban-client --test
+  changed_when: false
+
+- name: Fail2ban aktivieren
+  ansible.builtin.systemd:
+    name: fail2ban
+    enabled: true
+    state: started

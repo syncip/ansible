@@ -1,0 +1,47 @@
+---
+# Welche Quellen aktualisiert werden, steht in 50unattended-upgrades der
+# Distribution (Standard: nur Sicherheitsupdates). Das bleibt bewusst
+# unverändert, damit neue Distributionsversionen ohne Anpassung funktionieren.
+
+- name: Unattended-upgrades und needrestart installieren
+  ansible.builtin.apt:
+    name:
+      - unattended-upgrades
+      - needrestart
+    state: present
+
+- name: Tägliche Updates aktivieren
+  ansible.builtin.copy:
+    dest: /etc/apt/apt.conf.d/20auto-upgrades
+    content: |
+      // Verwaltet durch server-setup (github.com/syncip/ansible) – manuelle Änderungen werden überschrieben.
+      APT::Periodic::Update-Package-Lists "1";
+      APT::Periodic::Unattended-Upgrade "1";
+      APT::Periodic::AutocleanInterval "7";
+    mode: "0644"
+
+- name: Neustart- und Aufräum-Einstellungen
+  ansible.builtin.template:
+    src: 52server-setup-unattended-upgrades.j2
+    dest: /etc/apt/apt.conf.d/52server-setup-unattended-upgrades
+    mode: "0644"
+
+- name: Verzeichnis für needrestart-Einstellungen
+  ansible.builtin.file:
+    path: /etc/needrestart/conf.d
+    state: directory
+    mode: "0755"
+
+- name: Dienste nach Updates automatisch neu starten
+  ansible.builtin.copy:
+    dest: /etc/needrestart/conf.d/server-setup.conf
+    content: |
+      # Verwaltet durch server-setup (github.com/syncip/ansible) – manuelle Änderungen werden überschrieben.
+      $nrconf{restart} = 'a';
+    mode: "0644"
+
+- name: Unattended-upgrades aktivieren
+  ansible.builtin.systemd:
+    name: unattended-upgrades
+    enabled: true
+    state: started

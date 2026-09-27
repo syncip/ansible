@@ -1,0 +1,18 @@
+# Verwaltet durch server-setup (github.com/syncip/ansible) – manuelle Änderungen werden überschrieben.
+
+[DEFAULT]
+backend = systemd
+bantime = {{ fail2ban_bantime }}
+bantime.increment = true
+bantime.maxtime = {{ fail2ban_bantime_max }}
+findtime = {{ fail2ban_findtime }}
+maxretry = {{ fail2ban_maxretry }}
+ignoreip = {{ fail2ban_ignoreip | join(' ') }}
+{% if setup_firewall | bool %}
+banaction = ufw
+banaction_allports = ufw
+{% endif %}
+
+[sshd]
+enabled = true
+port = {{ ssh_listen_ports | join(',') }}

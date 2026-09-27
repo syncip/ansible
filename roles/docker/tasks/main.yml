@@ -1,0 +1,63 @@
+---
+- name: Kollidierende Pakete der Distribution entfernen
+  ansible.builtin.apt:
+    name: "{{ docker_conflicting_packages }}"
+    state: absent
+
+- name: Verzeichnis für APT-Schlüssel
+  ansible.builtin.file:
+    path: /etc/apt/keyrings
+    state: directory
+    mode: "0755"
+
+- name: GPG-Schlüssel von Docker herunterladen
+  ansible.builtin.get_url:
+    url: "https://download.docker.com/linux/{{ docker_distro }}/gpg"
+    dest: /etc/apt/keyrings/docker.asc
+    mode: "0644"
+
+- name: Paketarchitektur ermitteln
+  ansible.builtin.command: dpkg --print-architecture
+  register: docker_arch
+  changed_when: false
+
+- name: Docker-Paketquelle eintragen (deb822, signed-by)
+  ansible.builtin.copy:
+    dest: /etc/apt/sources.list.d/docker.sources
+    content: |
+      # Verwaltet durch server-setup (github.com/syncip/ansible) – manuelle Änderungen werden überschrieben.
+      Types: deb
+      URIs: https://download.docker.com/linux/{{ docker_distro }}
+      Suites: {{ docker_release }}
+      Components: stable
+      Architectures: {{ docker_arch.stdout }}
+      Signed-By: /etc/apt/keyrings/docker.asc
+    mode: "0644"
+  register: docker_repo
+
+- name: Docker installieren
+  ansible.builtin.apt:
+    name: "{{ docker_packages }}"
+    state: present
+    # Paketliste neu laden, wenn die Quelle neu ist oder Docker noch fehlt
+    # (z. B. nach einem abgebrochenen Lauf)
+    update_cache: "{{ docker_repo.changed or 'docker-ce' not in ansible_facts.packages }}"
+
+- name: Verzeichnis /etc/docker
+  ansible.builtin.file:
+    path: /etc/docker
+    state: directory
+    mode: "0755"
+
+- name: Log-Rotation für Container
+  ansible.builtin.copy:
+    dest: /etc/docker/daemon.json
+    content: "{{ {'log-driver': 'json-file', 'log-opts': {'max-size': docker_log_max_size, 'max-file': docker_log_max_file | string}} | to_nice_json }}\n"
+    mode: "0644"
+  notify: Docker neu starten
+
+- name: Docker aktivieren
+  ansible.builtin.systemd:
+    name: docker
+    enabled: true
+    state: started

@@ -1,0 +1,22 @@
+---
+# Die Handler laufen in dieser Reihenfolge. Bestehende SSH-Sitzungen bleiben
+# bei allen Varianten erhalten (KillMode=process).
+
+- name: Systemd neu laden (Socket-Aktivierung übernimmt den Port)
+  listen: SSH neu laden
+  ansible.builtin.systemd:
+    daemon_reload: true
+  when: ssh_socket.stdout | default('') == 'active'
+
+- name: Ssh.socket neu starten
+  listen: SSH neu laden
+  ansible.builtin.systemd:
+    name: ssh.socket
+    state: restarted
+  when: ssh_socket.stdout | default('') == 'active'
+
+- name: Ssh.service neu laden
+  listen: SSH neu laden
+  ansible.builtin.systemd:
+    name: ssh.service
+    state: "{{ 'restarted' if ssh_socket.stdout | default('') == 'active' else 'reloaded' }}"

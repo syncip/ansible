@@ -1,0 +1,5 @@
+// Verwaltet durch server-setup (github.com/syncip/ansible) – manuelle Änderungen werden überschrieben.
+Unattended-Upgrade::Automatic-Reboot "{{ 'true' if setup_auto_reboot | bool else 'false' }}";
+Unattended-Upgrade::Automatic-Reboot-Time "{{ setup_auto_reboot_time }}";
+Unattended-Upgrade::Remove-Unused-Kernel-Packages "true";
+Unattended-Upgrade::Remove-Unused-Dependencies "true";

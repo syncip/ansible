@@ -1,0 +1,4 @@
+---
+# Hier merkt sich die Rolle, welche Regeln sie selbst angelegt hat, damit
+# abgewählte Ports beim nächsten Lauf wieder geschlossen werden.
+firewall_state_file: /etc/server-setup/ufw-rules.json

@@ -1,0 +1,21 @@
+---
+# Konfiguration für den Integrationstest in GitHub Actions.
+# Der Key unter ci/keys hat keinen privaten Teil mehr (wurde verworfen).
+setup_hostname: "ci-test.example.com"
+setup_timezone: "Europe/Berlin"
+setup_ssh_port: 22022
+setup_ssh_keys:
+  - "ci-test"
+setup_keys_dir: "{{ playbook_dir }}/ci/keys"
+setup_firewall: true
+setup_firewall_ports:
+  - "80/tcp"
+  - "443/tcp"
+setup_fail2ban: true
+setup_auto_updates: true
+setup_auto_reboot: false
+setup_auto_reboot_time: "04:00"
+setup_docker: true
+
+# Im Container sind /etc/hostname und /etc/hosts nicht änderbar
+base_manage_hostname: false
