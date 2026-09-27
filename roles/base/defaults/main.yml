@@ -1,0 +1,19 @@
+---
+base_packages:
+  - ca-certificates
+  - curl
+  - vim
+  - htop
+  - tmux
+  - rsync
+  - jq
+  - unzip
+  - lsof
+  - bash-completion
+
+base_journald_max_use: 500M
+
+base_hostname_short: "{{ setup_hostname.split('.') | first }}"
+
+# In Containern (Tests) sind /etc/hostname und /etc/hosts nicht änderbar.
+base_manage_hostname: true

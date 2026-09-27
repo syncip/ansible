@@ -4,7 +4,7 @@
   tasks:
     - name: send discord message
       uri:
-        url: "https://discord.com/api/webhooks/1119291423817224333/KAnrBWNYkT7ipccMZkILqK6dSTopxg6tiG4Hd6upkkeIixSiQaRCva9WBTtuSlb19NYq"
+        url: "{{ discord_webhook_url }}"  # nicht im Repository speichern, z. B. -e discord_webhook_url=...
         method: POST
         body_format: json
         body: '{"content": "your-message"}'

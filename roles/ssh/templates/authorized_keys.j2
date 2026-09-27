@@ -1,0 +1,5 @@
+# Verwaltet durch server-setup (github.com/syncip/ansible) – manuelle Änderungen werden überschrieben.
+# Quelle: keys/*.pub im Repository syncip/ansible
+{% for key in setup_ssh_keys %}
+{{ lookup('ansible.builtin.file', setup_keys_dir ~ '/' ~ key ~ '.pub') }}
+{% endfor %}

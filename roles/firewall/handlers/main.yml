@@ -1,0 +1,6 @@
+---
+- name: Ufw neu laden
+  ansible.builtin.command: ufw reload
+  register: firewall_reload
+  changed_when: true
+  failed_when: firewall_reload.rc != 0 and 'not enabled' not in firewall_reload.stdout

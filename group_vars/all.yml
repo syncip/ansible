@@ -1,0 +1,30 @@
+---
+# Standardwerte. setup.sh schreibt die tatsächlichen Werte nach
+# /etc/server-setup/config.yml und übergibt sie mit -e (hat Vorrang).
+
+setup_hostname: "{{ ansible_facts['hostname'] }}"
+setup_timezone: "Europe/Berlin"
+
+# Namen der Dateien keys/<name>.pub, die root-Zugang bekommen
+setup_ssh_keys: []
+setup_keys_dir: "{{ playbook_dir }}/keys"
+setup_ssh_port: 22
+
+setup_firewall: true
+# Zusätzliche Regeln, z. B. ["80/tcp", "443/tcp"]. Der SSH-Port wird immer
+# automatisch und als erste Regel freigegeben.
+setup_firewall_ports: []
+
+setup_fail2ban: true
+
+setup_auto_updates: true
+setup_auto_reboot: false
+setup_auto_reboot_time: "04:00"
+
+setup_docker: false
+
+# Wird von setup.sh gesetzt:
+#   prepare  – SSH hört auf altem und neuem Port, Login-Regeln unverändert
+#   finalize – nur noch Key-Login, nur noch neuer Port
+setup_phase: finalize
+setup_finalized: false

@@ -1,0 +1,32 @@
+---
+- name: Server-Setup
+  hosts: all
+  gather_facts: true
+
+  pre_tasks:
+    - name: Unterstütztes System prüfen
+      ansible.builtin.assert:
+        that:
+          - >-
+            (ansible_facts['distribution'] == 'Debian' and ansible_facts['distribution_major_version'] in ['12', '13'])
+            or (ansible_facts['distribution'] == 'Ubuntu' and ansible_facts['distribution_version'] in ['22.04', '24.04', '26.04'])
+          - setup_phase in ['prepare', 'finalize']
+        fail_msg: "Nicht unterstützt: {{ ansible_facts['distribution'] }} {{ ansible_facts['distribution_version'] }} / Phase {{ setup_phase }}"
+        quiet: true
+
+    - name: Aktuelle SSH-Ports ermitteln
+      ansible.builtin.include_role:
+        name: ssh
+        tasks_from: facts.yml
+
+  roles:
+    - role: base
+    - role: firewall
+      when: setup_firewall | bool
+    - role: ssh
+    - role: fail2ban
+      when: setup_fail2ban | bool
+    - role: auto_updates
+      when: setup_auto_updates | bool
+    - role: docker
+      when: setup_docker | bool

@@ -1,0 +1,80 @@
+---
+- name: Ufw installieren
+  ansible.builtin.apt:
+    name: ufw
+    state: present
+
+- name: Standardregeln (eingehend blockieren, ausgehend erlauben, IPv6 an)
+  ansible.builtin.lineinfile:
+    path: /etc/default/ufw
+    regexp: "^{{ item.key }}="
+    line: '{{ item.key }}="{{ item.value }}"'
+  loop:
+    - { key: DEFAULT_INPUT_POLICY, value: DROP }
+    - { key: DEFAULT_OUTPUT_POLICY, value: ACCEPT }
+    - { key: IPV6, value: "yes" }
+  notify: Ufw neu laden
+
+- name: Gewünschte Regeln berechnen (SSH immer zuerst)
+  ansible.builtin.set_fact:
+    firewall_rules: >-
+      {{ (ssh_listen_ports | map('string') | map('regex_replace', '$', '/tcp') | list)
+         + (setup_firewall_ports | map('string') | list) }}
+
+- name: Bisher verwaltete Regeln lesen
+  ansible.builtin.slurp:
+    src: "{{ firewall_state_file }}"
+  register: firewall_previous_raw
+  failed_when: false
+
+- name: Bisher verwaltete Regeln übernehmen
+  ansible.builtin.set_fact:
+    firewall_previous: >-
+      {{ (firewall_previous_raw.content | b64decode | from_json) if firewall_previous_raw.content is defined else [] }}
+
+- name: Regeln freigeben (in dieser Reihenfolge, SSH zuerst)
+  ansible.builtin.command: ufw allow {{ item | quote }} comment 'server-setup'
+  loop: "{{ firewall_rules }}"
+  register: firewall_allow
+  changed_when: "'Skipping' not in firewall_allow.stdout"
+
+- name: Abgewählte Regeln entfernen
+  ansible.builtin.command: ufw delete allow {{ item | quote }}
+  loop: "{{ firewall_previous | difference(firewall_rules) }}"
+  register: firewall_delete
+  changed_when: "'deleted' in firewall_delete.stdout"
+
+- name: Alte SSH-Freigaben entfernen (auch nicht von uns angelegte)
+  ansible.builtin.command: ufw delete allow {{ item | quote }}
+  loop: >-
+    {{ (ssh_old_ports | map('string') | map('regex_replace', '$', '/tcp') | list)
+       + (ssh_old_ports | map('string') | list)
+       + (['OpenSSH'] if 22 in ssh_old_ports else []) }}
+  when: setup_phase == 'finalize'
+  register: firewall_delete_ssh
+  changed_when: "'deleted' in firewall_delete_ssh.stdout"
+  failed_when: false
+
+- name: Verwaltete Regeln merken
+  ansible.builtin.copy:
+    dest: "{{ firewall_state_file }}"
+    content: "{{ firewall_rules | to_nice_json }}\n"
+    mode: "0600"
+
+- name: Status von ufw lesen
+  ansible.builtin.command: ufw status
+  register: firewall_status
+  changed_when: false
+
+- name: Ufw aktivieren
+  ansible.builtin.command: ufw --force enable
+  when: "'Status: inactive' in firewall_status.stdout"
+  changed_when: true
+
+- name: Hinweis zu Docker
+  ansible.builtin.debug:
+    msg: >-
+      Achtung: Docker umgeht ufw. Ports, die ein Container mit "-p 8080:80"
+      veröffentlicht, sind trotzdem offen. Nur lokal veröffentlichen
+      ("-p 127.0.0.1:8080:80") oder einen Reverse-Proxy nutzen.
+  when: setup_docker | bool

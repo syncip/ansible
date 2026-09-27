@@ -1,0 +1,86 @@
+---
+- name: Paketquellen aktualisieren und System vollständig aktualisieren
+  ansible.builtin.apt:
+    update_cache: true
+    cache_valid_time: 3600
+    upgrade: dist
+
+- name: Basispakete installieren
+  ansible.builtin.apt:
+    name: "{{ base_packages }}"
+    state: present
+
+# --- Hostname -----------------------------------------------------------------
+- name: Hostname einrichten
+  when: base_manage_hostname | bool
+  block:
+    - name: Hostname setzen
+      ansible.builtin.hostname:
+        name: "{{ base_hostname_short }}"
+        use: systemd
+
+    - name: Hostname in /etc/hosts eintragen
+      ansible.builtin.lineinfile:
+        path: /etc/hosts
+        regexp: '^127\.0\.1\.1\s'
+        line: "127.0.1.1 {{ setup_hostname }}{{ (' ' ~ base_hostname_short) if setup_hostname != base_hostname_short else '' }}"
+        insertafter: '^127\.0\.0\.1\s'
+
+    - name: Cloud-init erkennen
+      ansible.builtin.stat:
+        path: /etc/cloud/cloud.cfg
+      register: base_cloud_init
+
+    - name: Cloud-init darf den Hostnamen nicht zurücksetzen
+      ansible.builtin.copy:
+        dest: /etc/cloud/cloud.cfg.d/99-server-setup.cfg
+        content: |
+          # Verwaltet durch server-setup (github.com/syncip/ansible) – manuelle Änderungen werden überschrieben.
+          preserve_hostname: true
+        mode: "0644"
+      when: base_cloud_init.stat.exists
+
+# --- Zeit -----------------------------------------------------------------------
+- name: Aktuelle Zeitzone lesen
+  ansible.builtin.command: timedatectl show --property=Timezone --value
+  register: base_timezone
+  changed_when: false
+
+- name: Zeitzone setzen
+  ansible.builtin.command: timedatectl set-timezone {{ setup_timezone | quote }}
+  when: base_timezone.stdout != setup_timezone
+  changed_when: true
+
+- name: Installierte Pakete ermitteln
+  ansible.builtin.package_facts:
+
+- name: Zeitsynchronisation (systemd-timesyncd), falls kein anderer NTP-Dienst da ist
+  when: not (['chrony', 'ntp', 'ntpsec', 'openntpd'] | intersect(ansible_facts.packages.keys() | list))
+  block:
+    - name: Systemd-timesyncd installieren
+      ansible.builtin.apt:
+        name: systemd-timesyncd
+        state: present
+
+    - name: Systemd-timesyncd aktivieren
+      ansible.builtin.systemd:
+        name: systemd-timesyncd
+        enabled: true
+        state: started
+
+# --- Journal ------------------------------------------------------------------
+- name: Verzeichnis für journald-Einstellungen
+  ansible.builtin.file:
+    path: /etc/systemd/journald.conf.d
+    state: directory
+    mode: "0755"
+
+- name: Größe des systemd-Journals begrenzen
+  ansible.builtin.copy:
+    dest: /etc/systemd/journald.conf.d/server-setup.conf
+    content: |
+      # Verwaltet durch server-setup (github.com/syncip/ansible) – manuelle Änderungen werden überschrieben.
+      [Journal]
+      SystemMaxUse={{ base_journald_max_use }}
+    mode: "0644"
+  notify: Journald neu starten

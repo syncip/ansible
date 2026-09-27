@@ -1,0 +1,101 @@
+---
+- name: Eingaben prüfen
+  ansible.builtin.assert:
+    that:
+      - setup_ssh_keys | length > 0
+      - setup_ssh_port | int >= 1
+      - setup_ssh_port | int <= 65535
+    fail_msg: "Mindestens ein Key (setup_ssh_keys) und ein gültiger Port (setup_ssh_port) sind nötig."
+    quiet: true
+
+- name: Key-Dateien prüfen
+  ansible.builtin.command: ssh-keygen -lf {{ (setup_keys_dir ~ '/' ~ item ~ '.pub') | quote }}
+  delegate_to: localhost
+  loop: "{{ setup_ssh_keys }}"
+  changed_when: false
+
+- name: Verzeichnis /root/.ssh
+  ansible.builtin.file:
+    path: /root/.ssh
+    state: directory
+    owner: root
+    group: root
+    mode: "0700"
+
+- name: Root-Keys schreiben (authorized_keys, ersetzt alle bisherigen Keys)
+  ansible.builtin.template:
+    src: authorized_keys.j2
+    dest: /root/.ssh/authorized_keys
+    owner: root
+    group: root
+    mode: "0600"
+    backup: true
+
+- name: Include von sshd_config.d prüfen
+  ansible.builtin.command: grep -Eq '^\s*Include\s+/etc/ssh/sshd_config\.d/\*\.conf' /etc/ssh/sshd_config
+  changed_when: false
+  register: ssh_include
+  failed_when: ssh_include.rc != 0
+  # Ohne Include würde unsere Drop-in-Datei ignoriert.
+
+- name: Konfiguration von sshd anwenden
+  block:
+    - name: Port-Zeilen in sshd_config auskommentieren (Ports kommen aus der Drop-in-Datei)
+      ansible.builtin.replace:
+        path: /etc/ssh/sshd_config
+        regexp: '^(\s*Port\s+.*)$'
+        replace: '# \1  # deaktiviert durch server-setup'
+        backup: true
+      notify: SSH neu laden
+
+    - name: Drop-in-Datei schreiben
+      ansible.builtin.template:
+        src: sshd.conf.j2
+        dest: "{{ ssh_dropin_path }}"
+        owner: root
+        group: root
+        mode: "0644"
+        backup: true
+      register: ssh_dropin
+      notify: SSH neu laden
+
+    - name: Gesamte sshd-Konfiguration testen
+      ansible.builtin.command: /usr/sbin/sshd -t
+      changed_when: false
+
+  rescue:
+    - name: Vorherige Drop-in-Datei wiederherstellen
+      ansible.builtin.copy:
+        src: "{{ ssh_dropin.backup_file }}"
+        dest: "{{ ssh_dropin_path }}"
+        remote_src: true
+        mode: "0644"
+      when: (ssh_dropin | default({})).backup_file | default('') | length > 0
+
+    - name: Neue Drop-in-Datei entfernen (es gab keine vorherige)
+      ansible.builtin.file:
+        path: "{{ ssh_dropin_path }}"
+        state: absent
+      when:
+        - (ssh_dropin | default({})).changed | default(false)
+        - (ssh_dropin | default({})).backup_file | default('') | length == 0
+
+    - name: Abbrechen
+      ansible.builtin.fail:
+        msg: "sshd -t ist fehlgeschlagen – die Änderung wurde zurückgenommen, SSH läuft unverändert weiter."
+
+- name: Socket-Aktivierung von SSH erkennen (Ubuntu ab 22.10)
+  ansible.builtin.command: systemctl is-active ssh.socket  # noqa: command-instead-of-module
+  register: ssh_socket
+  changed_when: false
+  failed_when: false
+
+- name: Handler jetzt ausführen
+  ansible.builtin.meta: flush_handlers
+
+- name: Prüfen, dass SSH auf allen Ports lauscht
+  ansible.builtin.wait_for:
+    port: "{{ item }}"
+    host: 127.0.0.1
+    timeout: 20
+  loop: "{{ ssh_listen_ports }}"

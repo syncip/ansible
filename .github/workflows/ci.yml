@@ -1,0 +1,86 @@
+---
+name: CI
+
+on:  # yamllint disable-line rule:truthy
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  lint:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Shellcheck
+        run: shellcheck setup.sh
+      - name: Ansible-Werkzeuge installieren
+        run: pipx install ansible-lint && pipx inject ansible-lint yamllint --include-apps
+      - name: Yamllint
+        run: yamllint .
+      - name: Ansible-lint
+        run: ansible-lint
+
+  # Kompletter Lauf von setup.sh (beide Phasen) in einem Container mit systemd
+  test:
+    name: test (${{ matrix.image }})
+    runs-on: ubuntu-24.04
+    continue-on-error: ${{ matrix.experimental }}
+    strategy:
+      fail-fast: false
+      matrix:
+        image: ["debian:12", "debian:13", "ubuntu:22.04", "ubuntu:24.04"]
+        experimental: [false]
+        include:
+          - image: "ubuntu:26.04"
+            experimental: true
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Testsystem bauen und starten
+        run: |
+          docker build --build-arg IMAGE=${{ matrix.image }} -t server-setup-test ci/
+          docker run -d --name target --privileged --cgroupns=host \
+            -v /sys/fs/cgroup:/sys/fs/cgroup:rw -v "$PWD:/src:ro" server-setup-test
+          for _ in $(seq 1 30); do
+            state="$(docker exec target systemctl is-system-running 2>/dev/null || true)"
+            [[ "$state" == running || "$state" == degraded ]] && break
+            sleep 1
+          done
+          echo "systemd: $state"
+
+      - name: Setup ausführen (1. Lauf)
+        run: docker exec target /src/setup.sh --local --config /src/ci/config.yml --yes
+
+      - name: Setup ausführen (2. Lauf, muss ebenfalls fehlerfrei sein)
+        run: docker exec target /src/setup.sh --local --config /src/ci/config.yml --yes
+
+      - name: Ergebnis prüfen
+        run: |
+          set -x
+          docker exec target bash -euo pipefail -c '
+            sshd="$(sshd -T)"
+            fw="$(ufw status)"
+            grep -qx "port 22022" <<<"$sshd"
+            ! grep -qx "port 22" <<<"$sshd"
+            grep -qx "passwordauthentication no" <<<"$sshd"
+            grep -qx "permitrootlogin without-password" <<<"$sshd"
+            grep -qx "authenticationmethods publickey" <<<"$sshd"
+            [[ -n "$(ss -Htln "sport = :22022")" ]]
+            [[ -z "$(ss -Htln "sport = :22")" ]]
+            grep -q ci-test-key /root/.ssh/authorized_keys
+            grep -q "Status: active" <<<"$fw"
+            grep -Eq "^22022/tcp +ALLOW" <<<"$fw"
+            ! grep -Eq "^22(/tcp)? " <<<"$fw"
+            grep -Eq "^443/tcp +ALLOW" <<<"$fw"
+            fail2ban-client status sshd
+            test -f /etc/apt/apt.conf.d/52server-setup-unattended-upgrades
+            docker version
+            docker compose version
+          '
+
+      - name: Protokoll bei Fehler
+        if: failure()
+        run: docker exec target cat /var/log/server-setup.log || true
